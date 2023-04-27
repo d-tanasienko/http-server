@@ -74,6 +74,7 @@ func userLoginHandler(writer http.ResponseWriter, request *http.Request, userSto
 	writer.Header().Add("X-Expires-After", currentTime.String())
 	writer.WriteHeader(http.StatusCreated)
 	encoder := json.NewEncoder(writer)
+	encoder.SetEscapeHTML(false)
 	encoder.Encode(responseData)
 }
 
