@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -12,22 +13,38 @@ import (
 
 	"httpserver/logger"
 	"httpserver/responses"
-	"httpserver/userstorage"
+	"httpserver/storage/tokenstorage"
+	"httpserver/storage/userstorage"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/pkgz/websocket"
 )
 
 func main() {
 	router := chi.NewRouter()
 	userStorage := userstorage.NewUserStorage()
+	tokenStorage := tokenstorage.NewTokenStorage()
+	activeUsersStorage := userstorage.NewActiveUsersStorage()
 	logger := logger.NewLogger()
+
+	router.Use(middleware.Logger)
+	router.Use(middleware.Recoverer)
 	router.Post("/user", func(w http.ResponseWriter, r *http.Request) {
 		userHandler(w, r, userStorage, logger)
 	})
 
 	router.Post("/user/login", func(w http.ResponseWriter, r *http.Request) {
-		userLoginHandler(w, r, userStorage, logger)
+		userLoginHandler(w, r, userStorage, logger, tokenStorage)
 	})
+
+	router.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
+		ws(w, r, tokenStorage, activeUsersStorage, logger)
+	})
+	router.Get("/user/active/list", func(w http.ResponseWriter, r *http.Request) {
+		userGetActiveList(w, activeUsersStorage)
+	})
+
 	http.Handle("/", router)
 
 	log.Fatal(http.ListenAndServe(GetPort(), nil))
@@ -49,7 +66,13 @@ func userHandler(writer http.ResponseWriter, request *http.Request, userStorage 
 	encoder.Encode(responseData)
 }
 
-func userLoginHandler(writer http.ResponseWriter, request *http.Request, userStorage *userstorage.UserStorage, logger *logger.Logger) {
+func userLoginHandler(
+	writer http.ResponseWriter,
+	request *http.Request,
+	userStorage *userstorage.UserStorage,
+	logger *logger.Logger,
+	tokenStorage *tokenstorage.TokenStorage,
+) {
 	userName, password, err := getUsernameAndPasswordFromBody(request)
 	if err != nil {
 		logger.Error(err.Error())
@@ -74,7 +97,9 @@ func userLoginHandler(writer http.ResponseWriter, request *http.Request, userSto
 		return
 	}
 
-	url := "ws://fancy-chat.io/ws&token=" + token
+	tokenStorage.Add(token, user)
+
+	url := "ws://localhost" + GetPort() + "/ws?token=" + token
 	responseData := responses.UserLoginResponse{Url: url}
 	writer.Header().Add("X-Rate-Limit", "60")
 	writer.Header().Add("X-Expires-After", currentTime.String())
@@ -82,6 +107,45 @@ func userLoginHandler(writer http.ResponseWriter, request *http.Request, userSto
 	encoder := json.NewEncoder(writer)
 	encoder.SetEscapeHTML(false)
 	encoder.Encode(responseData)
+}
+
+func userGetActiveList(w http.ResponseWriter, activeUsersStorage *userstorage.ActiveUsersStorage) {
+	userNames := make([]string, len(*activeUsersStorage))
+
+	i := 0
+	for k := range *activeUsersStorage {
+		userNames[i] = k
+		i++
+	}
+	w.WriteHeader(http.StatusOK)
+	encoder := json.NewEncoder(w)
+	encoder.Encode(userNames)
+}
+
+func ws(
+	w http.ResponseWriter,
+	r *http.Request,
+	tokenStorage *tokenstorage.TokenStorage,
+	activeUsersStorage *userstorage.ActiveUsersStorage,
+	logger *logger.Logger,
+) {
+	user, err := tokenStorage.Get(r.URL.Query().Get("token"))
+	if err != nil {
+		logger.Error(err.Error())
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	wsServer := websocket.Start(context.Background())
+	activeUsersStorage.Add(user)
+	wsServer.Handler(w, r)
+	wsServer.On("echo", func(c *websocket.Conn, msg *websocket.Message) {
+		err = c.Emit("echo", msg.Data)
+		if err != nil {
+			logger.Error(err.Error())
+		}
+	})
+	activeUsersStorage.Delete(user)
 }
 
 func getUsernameAndPasswordFromBody(request *http.Request) (string, string, error) {
