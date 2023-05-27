@@ -7,6 +7,7 @@ import (
 	"httpserver/internal/config"
 	"httpserver/internal/controller"
 	"httpserver/internal/logger"
+	"httpserver/internal/storage/activeuserstorage"
 	"httpserver/internal/storage/tokenstorage"
 	"httpserver/internal/storage/userstorage"
 
@@ -18,7 +19,7 @@ func main() {
 	router := chi.NewRouter()
 	userStorage := userstorage.NewUserStorage()
 	tokenStorage := tokenstorage.NewTokenStorage()
-	activeUsersStorage := userstorage.NewActiveUsersStorage()
+	activeUsersStorage := activeuserstorage.NewActiveUsersStorage()
 	logger := logger.NewLogger()
 
 	router.Use(middleware.Logger)

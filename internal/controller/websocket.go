@@ -3,8 +3,8 @@ package controller
 import (
 	"context"
 	"httpserver/internal/logger"
+	"httpserver/internal/storage/activeuserstorage"
 	"httpserver/internal/storage/tokenstorage"
-	"httpserver/internal/storage/userstorage"
 	"net/http"
 
 	"github.com/pkgz/websocket"
@@ -13,8 +13,8 @@ import (
 func Ws(
 	w http.ResponseWriter,
 	r *http.Request,
-	tokenStorage *tokenstorage.TokenStorage,
-	activeUsersStorage *userstorage.ActiveUsersStorage,
+	tokenStorage tokenstorage.TokenStorageInterface,
+	activeUsersStorage activeuserstorage.ActiveUsersStorageInterface,
 	logger *logger.Logger,
 ) {
 	user, err := tokenStorage.Get(r.URL.Query().Get("token"))
@@ -33,5 +33,6 @@ func Ws(
 			logger.Error(err.Error())
 		}
 	})
+
 	activeUsersStorage.Delete(user)
 }

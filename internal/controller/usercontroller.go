@@ -8,13 +8,14 @@ import (
 	"httpserver/internal/config"
 	"httpserver/internal/logger"
 	"httpserver/internal/responses"
+	"httpserver/internal/storage/activeuserstorage"
 	"httpserver/internal/storage/tokenstorage"
 	"httpserver/internal/storage/userstorage"
 	"net/http"
 	"time"
 )
 
-func UserHandler(writer http.ResponseWriter, request *http.Request, userStorage *userstorage.UserStorage, logger *logger.Logger) {
+func UserHandler(writer http.ResponseWriter, request *http.Request, userStorage userstorage.UserStorageInterface, logger *logger.Logger) {
 	userName, password, err := getUsernameAndPasswordFromBody(request)
 	if err != nil {
 		logger.Error(err.Error())
@@ -33,9 +34,9 @@ func UserHandler(writer http.ResponseWriter, request *http.Request, userStorage 
 func UserLoginHandler(
 	writer http.ResponseWriter,
 	request *http.Request,
-	userStorage *userstorage.UserStorage,
+	userStorage userstorage.UserStorageInterface,
 	logger *logger.Logger,
-	tokenStorage *tokenstorage.TokenStorage,
+	tokenStorage tokenstorage.TokenStorageInterface,
 ) {
 	userName, password, err := getUsernameAndPasswordFromBody(request)
 	if err != nil {
@@ -73,17 +74,10 @@ func UserLoginHandler(
 	encoder.Encode(responseData)
 }
 
-func UserGetActiveList(w http.ResponseWriter, activeUsersStorage *userstorage.ActiveUsersStorage) {
-	userNames := make([]string, len(*activeUsersStorage))
-
-	i := 0
-	for k := range *activeUsersStorage {
-		userNames[i] = k
-		i++
-	}
+func UserGetActiveList(w http.ResponseWriter, activeUsersStorage activeuserstorage.ActiveUsersStorageInterface) {
 	w.WriteHeader(http.StatusOK)
 	encoder := json.NewEncoder(w)
-	encoder.Encode(userNames)
+	encoder.Encode(activeUsersStorage.GetNames())
 }
 
 func getUsernameAndPasswordFromBody(request *http.Request) (string, string, error) {
