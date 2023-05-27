@@ -2,7 +2,7 @@ package tokenstorage
 
 import (
 	"errors"
-	"httpserver/storage/userstorage"
+	"httpserver/internal/storage/userstorage"
 )
 
 type TokenStorage map[string]*userstorage.User
