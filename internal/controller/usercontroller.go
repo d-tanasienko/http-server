@@ -1,39 +1,21 @@
-package main
+package controller
 
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"log"
+	"httpserver/internal/config"
+	"httpserver/internal/logger"
+	"httpserver/internal/responses"
+	"httpserver/internal/storage/activeuserstorage"
+	"httpserver/internal/storage/tokenstorage"
+	"httpserver/internal/storage/userstorage"
 	"net/http"
-	"os"
 	"time"
-
-	"httpserver/logger"
-	"httpserver/responses"
-	"httpserver/userstorage"
-
-	"github.com/go-chi/chi/v5"
 )
 
-func main() {
-	router := chi.NewRouter()
-	userStorage := userstorage.NewUserStorage()
-	logger := logger.NewLogger()
-	router.Post("/user", func(w http.ResponseWriter, r *http.Request) {
-		userHandler(w, r, userStorage, logger)
-	})
-
-	router.Post("/user/login", func(w http.ResponseWriter, r *http.Request) {
-		userLoginHandler(w, r, userStorage, logger)
-	})
-	http.Handle("/", router)
-
-	log.Fatal(http.ListenAndServe(GetPort(), nil))
-}
-
-func userHandler(writer http.ResponseWriter, request *http.Request, userStorage *userstorage.UserStorage, logger *logger.Logger) {
+func UserHandler(writer http.ResponseWriter, request *http.Request, userStorage userstorage.UserStorageInterface, logger *logger.Logger) {
 	userName, password, err := getUsernameAndPasswordFromBody(request)
 	if err != nil {
 		logger.Error(err.Error())
@@ -49,7 +31,13 @@ func userHandler(writer http.ResponseWriter, request *http.Request, userStorage 
 	encoder.Encode(responseData)
 }
 
-func userLoginHandler(writer http.ResponseWriter, request *http.Request, userStorage *userstorage.UserStorage, logger *logger.Logger) {
+func UserLoginHandler(
+	writer http.ResponseWriter,
+	request *http.Request,
+	userStorage userstorage.UserStorageInterface,
+	logger *logger.Logger,
+	tokenStorage tokenstorage.TokenStorageInterface,
+) {
 	userName, password, err := getUsernameAndPasswordFromBody(request)
 	if err != nil {
 		logger.Error(err.Error())
@@ -67,14 +55,16 @@ func userLoginHandler(writer http.ResponseWriter, request *http.Request, userSto
 	currentTime := time.Now().UTC()
 	currentTime = currentTime.Add(time.Hour * 1)
 
-	token, err := GenerateSecureToken()
+	token, err := generateSecureToken()
 	if err != nil {
 		logger.Error(err.Error())
 		writer.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 
-	url := "ws://fancy-chat.io/ws&token=" + token
+	tokenStorage.Add(token, user)
+
+	url := "ws://" + config.GetBaseUrl() + config.GetPort() + "/ws?token=" + token
 	responseData := responses.UserLoginResponse{Url: url}
 	writer.Header().Add("X-Rate-Limit", "60")
 	writer.Header().Add("X-Expires-After", currentTime.String())
@@ -82,6 +72,12 @@ func userLoginHandler(writer http.ResponseWriter, request *http.Request, userSto
 	encoder := json.NewEncoder(writer)
 	encoder.SetEscapeHTML(false)
 	encoder.Encode(responseData)
+}
+
+func UserGetActiveList(w http.ResponseWriter, activeUsersStorage activeuserstorage.ActiveUsersStorageInterface) {
+	w.WriteHeader(http.StatusOK)
+	encoder := json.NewEncoder(w)
+	encoder.Encode(activeUsersStorage.GetNames())
 }
 
 func getUsernameAndPasswordFromBody(request *http.Request) (string, string, error) {
@@ -110,19 +106,10 @@ func getUsernameAndPasswordFromBody(request *http.Request) (string, string, erro
 	return userName, password, nil
 }
 
-func GenerateSecureToken() (string, error) {
+func generateSecureToken() (string, error) {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
-}
-
-func GetPort() string {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3000"
-	}
-
-	return ":" + port
 }

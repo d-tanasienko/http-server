@@ -17,7 +17,7 @@ func NewLogger() *Logger {
 	_, b, _, _ := runtime.Caller(0)
 	basepath := filepath.Dir(b)
 
-	logsDir := filepath.Join(basepath, "..", "logs", "error.log")
+	logsDir := filepath.Join(basepath, "..", "..", "logs", "error.log")
 	if _, err := os.Stat(logsDir); err != nil {
 		if os.IsNotExist(err) {
 			os.MkdirAll(logsDir, 0755)
