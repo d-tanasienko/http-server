@@ -6,16 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"httpserver/internal/config"
-	"httpserver/internal/logger"
 	"httpserver/internal/responses"
 	"httpserver/internal/storage/activeuserstorage"
 	"httpserver/internal/storage/tokenstorage"
 	"httpserver/internal/storage/userstorage"
 	"net/http"
 	"time"
+
+	"go.uber.org/zap"
 )
 
-func UserHandler(writer http.ResponseWriter, request *http.Request, userStorage userstorage.UserStorageInterface, logger *logger.Logger) {
+func UserHandler(writer http.ResponseWriter, request *http.Request, userStorage userstorage.UserStorageInterface, logger *zap.SugaredLogger) {
 	userName, password, err := getUsernameAndPasswordFromBody(request)
 	if err != nil {
 		logger.Error(err.Error())
@@ -35,7 +36,7 @@ func UserLoginHandler(
 	writer http.ResponseWriter,
 	request *http.Request,
 	userStorage userstorage.UserStorageInterface,
-	logger *logger.Logger,
+	logger *zap.SugaredLogger,
 	tokenStorage tokenstorage.TokenStorageInterface,
 ) {
 	userName, password, err := getUsernameAndPasswordFromBody(request)
@@ -91,16 +92,16 @@ func getUsernameAndPasswordFromBody(request *http.Request) (string, string, erro
 	userName, userNameOk := body["userName"]
 	password, passwordOk := body["password"]
 
+	if !userNameOk || !passwordOk {
+		return "", "", errors.New("invalid username or password")
+	}
+
 	if len(userName) < 4 {
 		return "", "", errors.New("username should be 4 chars or longer")
 	}
 
 	if len(password) < 8 {
 		return "", "", errors.New("password should be 8 chars or longer")
-	}
-
-	if !userNameOk || !passwordOk {
-		return "", "", errors.New("invalid username or password")
 	}
 
 	return userName, password, nil
