@@ -2,12 +2,12 @@ package controller
 
 import (
 	"context"
-	"httpserver/internal/logger"
 	"httpserver/internal/storage/activeuserstorage"
 	"httpserver/internal/storage/tokenstorage"
 	"net/http"
 
 	"github.com/pkgz/websocket"
+	"go.uber.org/zap"
 )
 
 func Ws(
@@ -15,7 +15,7 @@ func Ws(
 	r *http.Request,
 	tokenStorage tokenstorage.TokenStorageInterface,
 	activeUsersStorage activeuserstorage.ActiveUsersStorageInterface,
-	logger *logger.Logger,
+	logger *zap.SugaredLogger,
 ) {
 	user, err := tokenStorage.Get(r.URL.Query().Get("token"))
 	if err != nil {
